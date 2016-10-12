@@ -35,8 +35,22 @@ public class FetchData implements
         GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener {
 
+    private static final String WEATHER_KEY = "weather";
+    private static final String HIGH_KEY = "high";
+    private static final String LOW_KEY = "low";
+
+    public FetchData() {
+    }
+
     public FetchData(Context context){
         this.context = context;
+        mGoogleApiClient = new GoogleApiClient.Builder(context)
+                .addApi(Wearable.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
+        mGoogleApiClient.connect();
     }
 
     private Context context;
@@ -73,7 +87,7 @@ public class FetchData implements
             double high = cursor.getDouble(INDEX_MAX_TEMP);
             double low = cursor.getDouble(INDEX_MIN_TEMP);
 
-            int iconId = Utility.getIconResourceForWeatherCondition(weatherId);
+            /*int iconId = Utility.getIconResourceForWeatherCondition(weatherId);
             Resources resources = context.getResources();
             int artResourceId = Utility.getArtResourceForWeatherCondition(weatherId);
             String artUrl = Utility.getArtUrlForWeatherCondition(context, weatherId);
@@ -88,8 +102,8 @@ public class FetchData implements
             int largeIconHeight = Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB
                     ? resources.getDimensionPixelSize(android.R.dimen.notification_large_icon_height)
                     : resources.getDimensionPixelSize(R.dimen.notification_large_icon_default);
-
-            // Retrieve the large icon
+*/
+            /*// Retrieve the large icon
             Bitmap largeIcon;
             try {
                 largeIcon = Glide.with(context)
@@ -101,49 +115,31 @@ public class FetchData implements
             } catch (InterruptedException | ExecutionException e) {
                 Log.e(LOG_TAG, "Error retrieving large icon from " + artUrl, e);
                 largeIcon = BitmapFactory.decodeResource(resources, artResourceId);
-            }
+            }*/
+            PutDataMapRequest dataMap = PutDataMapRequest.create("/weather");
+            dataMap.getDataMap().putInt(WEATHER_KEY, weatherId);
+            dataMap.getDataMap().putInt(HIGH_KEY, (int) high);
+            dataMap.getDataMap().putInt(LOW_KEY, (int) low);
 
-            tempHigh = Utility.formatTemperature(context, high);
-
-            tempLow  = Utility.formatTemperature(context, low);
-
-            mGoogleApiClient = new GoogleApiClient.Builder(context)
-                    .addApi(Wearable.API)
-                    .addConnectionCallbacks(this)
-                    .addOnConnectionFailedListener(this)
-                    .build();
-
-            mGoogleApiClient.connect();
-
-            Log.i("sahil", "high temp b4 send " + tempHigh);
-
-            PutDataMapRequest putDataMapRequest = PutDataMapRequest.create("/wear_temp");
-            putDataMapRequest.getDataMap().putString("HighTemp", tempHigh);
-            putDataMapRequest.getDataMap().putString("LowTemp", tempLow);
-
-            PutDataRequest request = putDataMapRequest.asPutDataRequest().setUrgent();
-
-            Log.i("sahil", "Data items length b4 send " + request.toString());
+            PutDataRequest request = dataMap.asPutDataRequest();
+            request.setUrgent();
 
             Wearable.DataApi.putDataItem(mGoogleApiClient, request)
-                .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
-                    @Override
-                    public void onResult(@NonNull DataApi.DataItemResult dataItemResult) {
-                        if(dataItemResult.getStatus().isSuccess()) {
-                            Log.d("sahil ", "successfully sent data items");
+                    .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
+                        @Override
+                        public void onResult(DataApi.DataItemResult dataItemResult) {
+                            Log.d("Jeremy silver", "Sending weather was successful: " + dataItemResult.getStatus()
+                                    .isSuccess());
                         }
-                        else {
-                            Log.d("sahil ", "failed to send data item");
-                        }
-                    }
-                });
+                    });
         }
+
         cursor.close();
     }
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
-
+        fetchDataForWearable();
     }
 
     @Override

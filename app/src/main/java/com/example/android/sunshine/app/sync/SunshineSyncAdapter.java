@@ -24,6 +24,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.IntDef;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
 import android.text.format.Time;
@@ -36,7 +38,13 @@ import com.example.android.sunshine.app.R;
 import com.example.android.sunshine.app.Utility;
 import com.example.android.sunshine.app.data.WeatherContract;
 import com.example.android.sunshine.app.muzei.WeatherMuzeiSource;
-import com.example.android.sunshine.app.wearcompanion.FetchData;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.PutDataMapRequest;
+import com.google.android.gms.wearable.PutDataRequest;
+import com.google.android.gms.wearable.Wearable;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -88,8 +96,25 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
     public static final int LOCATION_STATUS_UNKNOWN = 3;
     public static final int LOCATION_STATUS_INVALID = 4;
 
+    //sahil variables start
+
+    private static final String WEATHER_KEY = "weather";
+    private static final String HIGH_KEY = "high";
+    private static final String LOW_KEY = "low";
+
+    private GoogleApiClient mGoogleApiClient;
+
+    private static final String[] WEAR_WEATHER_PROJECTION = new String[] {
+            WeatherContract.WeatherEntry.COLUMN_WEATHER_ID,
+            WeatherContract.WeatherEntry.COLUMN_MAX_TEMP,
+            WeatherContract.WeatherEntry.COLUMN_MIN_TEMP
+    };
+
+    //sahil variables end
+
     public SunshineSyncAdapter(Context context, boolean autoInitialize) {
         super(context, autoInitialize);
+        updateWear();
     }
 
     @Override
@@ -368,10 +393,72 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
         context.sendBroadcast(dataUpdatedIntent);
     }
 
-    private void updateWear(){
-        FetchData sendData = new FetchData(getContext());
-        sendData.fetchDataForWearable();
+    //sahil method start
+
+    public void fetchDataForWearable() {
+
+        String locationQuery = Utility.getPreferredLocation(getContext());
+
+        Uri weatherUri = WeatherContract.WeatherEntry.buildWeatherLocationWithDate(locationQuery, System.currentTimeMillis());
+
+        // we'll query our contentProvider, as always
+        Cursor cursor = getContext().getContentResolver().query(weatherUri, WEAR_WEATHER_PROJECTION, null, null, null);
+
+        if (cursor.moveToFirst()) {
+            int weatherId = cursor.getInt(INDEX_WEATHER_ID);
+            double high = cursor.getDouble(INDEX_MAX_TEMP);
+            double low = cursor.getDouble(INDEX_MIN_TEMP);
+
+            Log.i("sahil", "wear low:" + (int)low + " wear high:" +(int)high+ " wear id:" + weatherId);
+
+            PutDataMapRequest dataMap = PutDataMapRequest.create("/weather");
+            dataMap.getDataMap().putInt(WEATHER_KEY, weatherId);
+            dataMap.getDataMap().putInt(HIGH_KEY, (int) high);
+            dataMap.getDataMap().putInt(LOW_KEY, (int) low);
+
+            PutDataRequest request = dataMap.asPutDataRequest();
+            request.setUrgent();
+
+            Log.i("sahil", "wear transmit request created" + request.toString());
+
+            Wearable.DataApi.putDataItem(mGoogleApiClient, request)
+                    .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
+                        @Override
+                        public void onResult(DataApi.DataItemResult dataItemResult) {
+                            Log.i("sahil", "Sending weather result: " + dataItemResult.getStatus());
+                        }
+                    });
+        }
+        cursor.close();
     }
+
+    private void updateWear(){
+        mGoogleApiClient = new GoogleApiClient.Builder(getContext())
+                .addApi(Wearable.API)
+                .addConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
+                    @Override
+                    public void onConnected(@Nullable Bundle bundle) {
+                        Log.i("sahil", "Wear transmit connection established success");
+                        fetchDataForWearable();
+                    }
+
+                    @Override
+                    public void onConnectionSuspended(int i) {
+                        Log.i("sahil", "Wear transmit connection suspended.");
+                    }
+                })
+                .addOnConnectionFailedListener(new GoogleApiClient.OnConnectionFailedListener() {
+                    @Override
+                    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+                        Log.i("sahil", "Wear transmit connection failed.");
+                    }
+                })
+                .build();
+
+        mGoogleApiClient.connect();
+    }
+
+    //sahil method end
 
     private void updateMuzei() {
         // Muzei is only compatible with Jelly Bean MR1+ devices, so there's no need to update the

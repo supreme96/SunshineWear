@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package com.example.android.sunshine.wear;
+package com.example.android.sunshine.app;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -42,21 +43,19 @@ import android.view.WindowInsets;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
-import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.ResultCallbacks;
 import com.google.android.gms.common.api.Status;
-import com.google.android.gms.wearable.DataApi;
-import com.google.android.gms.wearable.DataEvent;
-import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.DataItem;
 import com.google.android.gms.wearable.DataItemBuffer;
 import com.google.android.gms.wearable.DataMap;
 import com.google.android.gms.wearable.DataMapItem;
 import com.google.android.gms.wearable.Wearable;
-import com.google.android.gms.wearable.WearableListenerService;
 
 import java.lang.ref.WeakReference;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -66,8 +65,24 @@ import java.util.concurrent.TimeUnit;
  */
 public class WeatherWatchFace extends CanvasWatchFaceService {
 
-    private String receivedhighTemp = "  ";
-    private String receivedlowTemp = "  ";
+    private int receivedhighTemp;
+    private int receivedlowTemp;
+
+    private Paint highTempPaint;
+    private Paint lowTempPaint;
+    private Paint datePaint;
+
+    private String highTemp = "  ";
+    private String lowTemp = "  ";
+
+    private Bitmap weatherIcon;
+    private int weatherIconId = -1;
+
+    private SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, MMM dd yyyy", Locale.getDefault());
+
+    private static final String WEATHER_KEY = "weather";
+    private static final String HIGH_KEY = "high";
+    private static final String LOW_KEY = "low";
 
     private static final Typeface NORMAL_TYPEFACE =
             Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL);
@@ -82,6 +97,35 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
      * Handler message id for updating the time periodically in interactive mode.
      */
     private static final int MSG_UPDATE_TIME = 0;
+
+    public static int getIconResourceForWeatherCondition(int weatherId) {
+        // Based on weather code data found at:
+        // http://bugs.openweathermap.org/projects/api/wiki/Weather_Condition_Codes
+        if (weatherId >= 200 && weatherId <= 232) {
+            return R.drawable.ic_storm;
+        } else if (weatherId >= 300 && weatherId <= 321) {
+            return R.drawable.ic_light_rain;
+        } else if (weatherId >= 500 && weatherId <= 504) {
+            return R.drawable.ic_rain;
+        } else if (weatherId == 511) {
+            return R.drawable.ic_snow;
+        } else if (weatherId >= 520 && weatherId <= 531) {
+            return R.drawable.ic_rain;
+        } else if (weatherId >= 600 && weatherId <= 622) {
+            return R.drawable.ic_snow;
+        } else if (weatherId >= 701 && weatherId <= 761) {
+            return R.drawable.ic_fog;
+        } else if (weatherId == 761 || weatherId == 781) {
+            return R.drawable.ic_storm;
+        } else if (weatherId == 800) {
+            return R.drawable.ic_clear;
+        } else if (weatherId == 801) {
+            return R.drawable.ic_light_clouds;
+        } else if (weatherId >= 802 && weatherId <= 804) {
+            return R.drawable.ic_cloudy;
+        }
+        return R.drawable.ic_clear;
+    }
 
     @Override
     public Engine onCreateEngine() {
@@ -109,13 +153,12 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
         }
     }
 
-    private class Engine extends CanvasWatchFaceService.Engine
-            implements GoogleApiClient.ConnectionCallbacks,
-            GoogleApiClient.OnConnectionFailedListener {
+    private class Engine extends CanvasWatchFaceService.Engine {
 
-        private GoogleApiClient mGoogleApiClient;
+        private GoogleApiClient client;
 
         final Handler mUpdateTimeHandler = new EngineHandler(this);
+
         boolean mRegisteredTimeZoneReceiver = false;
         Paint mBackgroundPaint;
         Paint mTextPaint;
@@ -137,9 +180,12 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
          */
         boolean mLowBitAmbient;
 
+
+
         protected void getUpdatedWeather(){
-            Log.i("sahil", "Enter wear onConnected");
-            PendingResult<DataItemBuffer> results = Wearable.DataApi.getDataItems(mGoogleApiClient);
+            Log.i("sahil", "getweatherupdate called");
+            Log.i("sahil", "is client connected:" + client.isConnected());
+            final PendingResult<DataItemBuffer> results = Wearable.DataApi.getDataItems(client);
             results.setResultCallback(new ResultCallbacks<DataItemBuffer>() {
                 @Override
                 public void onSuccess(@NonNull DataItemBuffer dataItems) {
@@ -147,22 +193,20 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
                     Log.i("sahil", "Wear data items length" + dataItems.getCount());
                     for (DataItem item : dataItems) {
                         Log.i("sahil", "wear onSuccess inside for");
-                        if (item.getUri().getPath().equals("/wear_temp")) {
-                            Log.i("sahil", "Enter wear onCreate");
+                        Log.i("sahil", "wear recieved data uri" + item.getUri());
+                        if (item.getUri().getLastPathSegment().equals("weather")) {
+
                             DataMapItem dataMapItem = DataMapItem.fromDataItem(item);
 
                             DataMap dataMap = dataMapItem.getDataMap();
 
-                            receivedhighTemp = dataMap.getString("HighTemp");
-                            Log.i("sahil", "fetched wear temp high" + receivedhighTemp);
-                            receivedlowTemp = dataMap.getString("LowTemp");
-                            /*weatherType = dataMap.getInt(WEATHER_KEY);
-                            weatherIcon = BitmapFactory.decodeResource(getResources(), Utils.getIconResourceForWeatherCondition(weatherType));*/
+                            receivedhighTemp = dataMap.getInt(HIGH_KEY);
+                            receivedlowTemp = dataMap.getInt(LOW_KEY);
+                            Log.i("sahil", "Wear received info-> high:" + receivedhighTemp+ " low:" + receivedlowTemp);
+                            weatherIconId =dataMap.getInt(WEATHER_KEY);
+                            weatherIcon = BitmapFactory.decodeResource(getResources(), getIconResourceForWeatherCondition(weatherIconId));
                         }
-                        else{
-                            Log.i("sahil", "wear onConnected path not verified");
-                        }
-                        Log.i("sahil", "wear successful connected complete");
+                        Log.i("sahil", item.toString());
                     }
 
                     invalidate();
@@ -170,22 +214,10 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
 
                 @Override
                 public void onFailure(@NonNull Status status) {
-                    Log.i("sahil", "wear onconnected callback failed");
+                    Log.i("sahil", "Failed to get any data items");
                 }
             });
-        }
-
-        @Override
-        public void onConnected(@Nullable Bundle bundle) {
-            getUpdatedWeather();
-        }
-
-        @Override
-        public void onConnectionSuspended(int i) {
-        }
-
-        @Override
-        public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+            Log.i("sahil", "exiting getWeatherUpdate method");
         }
 
         @Override
@@ -194,14 +226,30 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
 
             Log.i("sahil", "Enter wear onCreate");
 
-            mGoogleApiClient = new GoogleApiClient.Builder(getApplicationContext())
+            client = new GoogleApiClient.Builder(getApplicationContext())
+                    .addConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks(){
+                        @Override
+                        public void onConnected(Bundle bundle) {
+                            Log.i("sahil", "Wear reciever connection success");
+                            getUpdatedWeather();
+                        }
+
+                        @Override
+                        public void onConnectionSuspended(int i) {
+                            Log.d("sahil", "wear receiver ConnectionSuspended");
+                        }
+                    })
                     .addApi(Wearable.API)
-                    .addConnectionCallbacks(this)
-                    .addOnConnectionFailedListener(this)
+                    .addOnConnectionFailedListener(new GoogleApiClient.OnConnectionFailedListener(){
+                        @Override
+                        public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+                            Log.d("sahil", "wear receiver ConnectionFailed");
+                        }
+                    })
                     .build();
             Log.i("sahil", "Created client");
 
-            mGoogleApiClient.connect();
+            client.connect();
 
             Log.i("sahil", "called connect client");
 
@@ -217,7 +265,19 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
             mBackgroundPaint.setColor(resources.getColor(R.color.background));
 
             mTextPaint = new Paint();
-            mTextPaint = createTextPaint(resources.getColor(R.color.digital_text));
+            mTextPaint = createTextPaint(Color.WHITE, 1, 70);
+            mTextPaint.setTextAlign(Paint.Align.CENTER);
+
+            highTempPaint = createTextPaint(Color.WHITE, 1, 30);
+            highTempPaint.setTextAlign(Paint.Align.RIGHT);
+
+            lowTempPaint = createTextPaint(Color.WHITE, 1, 30);
+            lowTempPaint.setTextAlign(Paint.Align.LEFT);
+
+            datePaint = createTextPaint(Color.WHITE, .5, 30);
+            datePaint.setTextAlign(Paint.Align.CENTER);
+
+            weatherIcon = BitmapFactory.decodeResource(getResources(), R.drawable.ic_clear);
 
             mCalendar = Calendar.getInstance();
         }
@@ -233,6 +293,16 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
             paint.setColor(textColor);
             paint.setTypeface(NORMAL_TYPEFACE);
             paint.setAntiAlias(true);
+            return paint;
+        }
+
+        private Paint createTextPaint(int textColor, double alpha, float textSize) {
+            Paint paint = new Paint();
+            paint.setColor(textColor);
+            paint.setTypeface(NORMAL_TYPEFACE);
+            paint.setAlpha((int) (alpha * 255));
+            paint.setAntiAlias(true);
+            paint.setTextSize(textSize);
             return paint;
         }
 
@@ -327,17 +397,25 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
 
             // Draw H:MM in ambient mode or H:MM:SS in interactive mode.
             long now = System.currentTimeMillis();
+            mCalendar.setTimeZone(TimeZone.getDefault());
             mCalendar.setTimeInMillis(now);
 
-            String text = mAmbient
-                    ? String.format("%d:%02d", mCalendar.get(Calendar.HOUR),
-                    mCalendar.get(Calendar.MINUTE))
-                    : String.format("%d:%02d:%02d", mCalendar.get(Calendar.HOUR),
-                    mCalendar.get(Calendar.MINUTE), mCalendar.get(Calendar.SECOND));
-            canvas.drawText(text, mXOffset, mYOffset, mTextPaint);
+            String date = dateFormat.format(new Date());
+
+            Locale loc = Locale.getDefault();
+
+            String text = String.format(loc,"%d:%02d", mCalendar.get(Calendar.HOUR),
+                    mCalendar.get(Calendar.MINUTE));
+
+            highTemp = String.format(loc, "%d\u00b0 ", receivedhighTemp);
+            lowTemp = String.format(loc, "%d\u00b0 ", receivedlowTemp);
+
+            canvas.drawText(text, bounds.width()/2, bounds.height()/2-45, mTextPaint);
             Log.i("sahil", "wear value b4 print high" + receivedhighTemp);
-            canvas.drawText(receivedhighTemp, mXOffset, mYOffset +60, mTextPaint);
-            canvas.drawText(receivedlowTemp, mXOffset+55, mYOffset +60, mTextPaint);
+            canvas.drawText(date, bounds.width()/2, bounds.height()/2-10, datePaint);
+            canvas.drawText(highTemp, bounds.width()*3/4, bounds.height()/2+35, highTempPaint);
+            canvas.drawText(lowTemp, bounds.width()*3/4, bounds.height()/2+35, lowTempPaint);
+            canvas.drawBitmap(weatherIcon, bounds.width()*1/4, bounds.height()/2+5, null);
         }
 
         /**
