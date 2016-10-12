@@ -67,6 +67,7 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
 
     private int receivedhighTemp;
     private int receivedlowTemp;
+    private int flagRealDataAvailable=0;
 
     private Paint highTempPaint;
     private Paint lowTempPaint;
@@ -205,6 +206,7 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
                             Log.i("sahil", "Wear received info-> high:" + receivedhighTemp+ " low:" + receivedlowTemp);
                             weatherIconId =dataMap.getInt(WEATHER_KEY);
                             weatherIcon = BitmapFactory.decodeResource(getResources(), getIconResourceForWeatherCondition(weatherIconId));
+                            flagRealDataAvailable = 1;
                         }
                         Log.i("sahil", item.toString());
                     }
@@ -407,9 +409,10 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
             String text = String.format(loc,"%d:%02d", mCalendar.get(Calendar.HOUR),
                     mCalendar.get(Calendar.MINUTE));
 
-            highTemp = String.format(loc, "%d\u00b0 ", receivedhighTemp);
-            lowTemp = String.format(loc, "%d\u00b0 ", receivedlowTemp);
-
+            if(flagRealDataAvailable == 1) {
+                highTemp = String.format(loc, "%d\u00b0 ", receivedhighTemp);
+                lowTemp = String.format(loc, "%d\u00b0 ", receivedlowTemp);
+            }
             canvas.drawText(text, bounds.width()/2, bounds.height()/2-45, mTextPaint);
             Log.i("sahil", "wear value b4 print high" + receivedhighTemp);
             canvas.drawText(date, bounds.width()/2, bounds.height()/2-10, datePaint);
