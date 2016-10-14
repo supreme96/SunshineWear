@@ -409,16 +409,18 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
             String text = String.format(loc,"%d:%02d", mCalendar.get(Calendar.HOUR),
                     mCalendar.get(Calendar.MINUTE));
 
-            if(flagRealDataAvailable == 1) {
-                highTemp = String.format(loc, "%d\u00b0 ", receivedhighTemp);
-                lowTemp = String.format(loc, "%d\u00b0 ", receivedlowTemp);
-            }
+
+            highTemp = String.format(loc, "%d\u00b0 ", receivedhighTemp);
+            lowTemp = String.format(loc, "%d\u00b0 ", receivedlowTemp);
+
             canvas.drawText(text, bounds.width()/2, bounds.height()/2-45, mTextPaint);
             Log.i("sahil", "wear value b4 print high" + receivedhighTemp);
             canvas.drawText(date, bounds.width()/2, bounds.height()/2-10, datePaint);
-            canvas.drawText(highTemp, bounds.width()*3/4, bounds.height()/2+35, highTempPaint);
-            canvas.drawText(lowTemp, bounds.width()*3/4, bounds.height()/2+35, lowTempPaint);
-            canvas.drawBitmap(weatherIcon, bounds.width()*1/4, bounds.height()/2+5, null);
+            if(flagRealDataAvailable == 1 && mAmbient == false) {
+                canvas.drawText(highTemp, bounds.width()*3/4, bounds.height()/2+35, highTempPaint);
+                canvas.drawText(lowTemp, bounds.width()*3/4, bounds.height()/2+35, lowTempPaint);
+                canvas.drawBitmap(weatherIcon, bounds.width()*1/4, bounds.height()/2+5, null);
+            }
         }
 
         /**
