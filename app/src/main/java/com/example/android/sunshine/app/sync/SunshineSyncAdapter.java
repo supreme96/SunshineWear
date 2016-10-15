@@ -98,9 +98,10 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
 
     //sahil variables start
 
-    private static final String WEATHER_KEY = "weather";
-    private static final String HIGH_KEY = "high";
-    private static final String LOW_KEY = "low";
+    private static final String WEATHER_ID_KEY = "weather";
+    private static final String HIGH_TEMP_KEY = "high";
+    private static final String LOW_TEMP_KEY = "low";
+    private static final String WEAR_PATH = "/weather";
 
     private GoogleApiClient mGoogleApiClient;
 
@@ -411,10 +412,10 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
 
             Log.i("sahil", "wear low:" + (int)low + " wear high:" +(int)high+ " wear id:" + weatherId);
 
-            PutDataMapRequest dataMap = PutDataMapRequest.create("/weather");
-            dataMap.getDataMap().putInt(WEATHER_KEY, weatherId);
-            dataMap.getDataMap().putInt(HIGH_KEY, (int) high);
-            dataMap.getDataMap().putInt(LOW_KEY, (int) low);
+            PutDataMapRequest dataMap = PutDataMapRequest.create(WEAR_PATH);
+            dataMap.getDataMap().putInt(WEATHER_ID_KEY, weatherId);
+            dataMap.getDataMap().putInt(HIGH_TEMP_KEY, (int) high);
+            dataMap.getDataMap().putInt(LOW_TEMP_KEY, (int) low);
 
             PutDataRequest request = dataMap.asPutDataRequest();
             request.setUrgent();

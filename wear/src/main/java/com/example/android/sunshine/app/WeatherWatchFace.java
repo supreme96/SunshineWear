@@ -65,8 +65,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class WeatherWatchFace extends CanvasWatchFaceService {
 
-    private int receivedhighTemp;
-    private int receivedlowTemp;
+    private int receivedhighTemp = -1000;
+    private int receivedlowTemp = -1000;
     private int flagRealDataAvailable=0;
 
     private Paint highTempPaint;
@@ -81,9 +81,10 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
 
     private SimpleDateFormat dateFormat = new SimpleDateFormat("EEE, MMM dd yyyy", Locale.getDefault());
 
-    private static final String WEATHER_KEY = "weather";
-    private static final String HIGH_KEY = "high";
-    private static final String LOW_KEY = "low";
+    private static final String WEATHER_ID_KEY = "weather";
+    private static final String HIGH_TEMP_KEY = "high";
+    private static final String LOW_TEMP_KEY = "low";
+    private static final String WEAR_PATH = "/weather";
 
     private static final Typeface NORMAL_TYPEFACE =
             Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL);
@@ -92,7 +93,7 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
      * Update rate in milliseconds for interactive mode. We update once a second since seconds are
      * displayed in interactive mode.
      */
-    private static final long INTERACTIVE_UPDATE_RATE_MS = TimeUnit.SECONDS.toMillis(10);
+    private static final long INTERACTIVE_UPDATE_RATE_MS = TimeUnit.SECONDS.toMillis(15);
 
     /**
      * Handler message id for updating the time periodically in interactive mode.
@@ -195,18 +196,23 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
                     for (DataItem item : dataItems) {
                         Log.i("sahil", "wear onSuccess inside for");
                         Log.i("sahil", "wear recieved data uri" + item.getUri());
-                        if (item.getUri().getLastPathSegment().equals("weather")) {
+                        if (item.getUri().getPath().equals(WEAR_PATH)) {
 
                             DataMapItem dataMapItem = DataMapItem.fromDataItem(item);
 
                             DataMap dataMap = dataMapItem.getDataMap();
 
-                            receivedhighTemp = dataMap.getInt(HIGH_KEY);
-                            receivedlowTemp = dataMap.getInt(LOW_KEY);
+                            receivedhighTemp = dataMap.getInt(HIGH_TEMP_KEY);
+                            receivedlowTemp = dataMap.getInt(LOW_TEMP_KEY);
                             Log.i("sahil", "Wear received info-> high:" + receivedhighTemp+ " low:" + receivedlowTemp);
-                            weatherIconId =dataMap.getInt(WEATHER_KEY);
+                            weatherIconId =dataMap.getInt(WEATHER_ID_KEY);
                             weatherIcon = BitmapFactory.decodeResource(getResources(), getIconResourceForWeatherCondition(weatherIconId));
-                            flagRealDataAvailable = 1;
+                            if(receivedhighTemp!= -1000 && receivedlowTemp != -1000){
+                                flagRealDataAvailable = 1;
+                            }
+                            else{
+                                flagRealDataAvailable = 0;
+                            }
                         }
                         Log.i("sahil", item.toString());
                     }
@@ -273,7 +279,7 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
             highTempPaint = createTextPaint(Color.WHITE, 1, 30);
             highTempPaint.setTextAlign(Paint.Align.RIGHT);
 
-            lowTempPaint = createTextPaint(Color.WHITE, 1, 30);
+            lowTempPaint = createTextPaint(Color.WHITE, .5, 30);
             lowTempPaint.setTextAlign(Paint.Align.LEFT);
 
             datePaint = createTextPaint(Color.WHITE, .5, 30);
@@ -410,17 +416,18 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
                     mCalendar.get(Calendar.MINUTE));
 
 
-            highTemp = String.format(loc, "%d\u00b0 ", receivedhighTemp);
-            lowTemp = String.format(loc, "%d\u00b0 ", receivedlowTemp);
 
-            canvas.drawText(text, bounds.width()/2, bounds.height()/2-45, mTextPaint);
-            Log.i("sahil", "wear value b4 print high" + receivedhighTemp);
-            canvas.drawText(date, bounds.width()/2, bounds.height()/2-10, datePaint);
             if(flagRealDataAvailable == 1 && mAmbient == false) {
+                highTemp = String.format(loc, "%d\u00b0 ", receivedhighTemp);
+                lowTemp = String.format(loc, "%d\u00b0 ", receivedlowTemp);
                 canvas.drawText(highTemp, bounds.width()*3/4, bounds.height()/2+35, highTempPaint);
                 canvas.drawText(lowTemp, bounds.width()*3/4, bounds.height()/2+35, lowTempPaint);
                 canvas.drawBitmap(weatherIcon, bounds.width()*1/4, bounds.height()/2+5, null);
             }
+
+            canvas.drawText(text, bounds.width()/2, bounds.height()/2-45, mTextPaint);
+            Log.i("sahil", "wear value b4 print high" + receivedhighTemp);
+            canvas.drawText(date, bounds.width()/2, bounds.height()/2-10, datePaint);
         }
 
         /**
