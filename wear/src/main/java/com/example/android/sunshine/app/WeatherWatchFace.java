@@ -45,6 +45,9 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.ResultCallbacks;
 import com.google.android.gms.common.api.Status;
+import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.DataEvent;
+import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.DataItem;
 import com.google.android.gms.wearable.DataItemBuffer;
 import com.google.android.gms.wearable.DataMap;
@@ -155,7 +158,7 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
         }
     }
 
-    private class Engine extends CanvasWatchFaceService.Engine {
+    private class Engine extends CanvasWatchFaceService.Engine implements DataApi.DataListener{
 
         private GoogleApiClient client;
 
@@ -182,50 +185,34 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
          */
         boolean mLowBitAmbient;
 
+        @Override
+        public void onDataChanged(DataEventBuffer dataEventBuffer) {
+            for(DataEvent event : dataEventBuffer){
+                if(event.getType() == DataEvent.TYPE_CHANGED){
+                    DataItem item = event.getDataItem();
 
+                    if (item.getUri().getPath().equals(WEAR_PATH)) {
 
-        protected void getUpdatedWeather(){
-            Log.i("sahil", "getweatherupdate called");
-            Log.i("sahil", "is client connected:" + client.isConnected());
-            final PendingResult<DataItemBuffer> results = Wearable.DataApi.getDataItems(client);
-            results.setResultCallback(new ResultCallbacks<DataItemBuffer>() {
-                @Override
-                public void onSuccess(@NonNull DataItemBuffer dataItems) {
-                    Log.i("sahil", "Enter successful result callback " + dataItems.getCount());
-                    Log.i("sahil", "Wear data items length" + dataItems.getCount());
-                    for (DataItem item : dataItems) {
-                        Log.i("sahil", "wear onSuccess inside for");
-                        Log.i("sahil", "wear recieved data uri" + item.getUri());
-                        if (item.getUri().getPath().equals(WEAR_PATH)) {
+                        DataMapItem dataMapItem = DataMapItem.fromDataItem(item);
 
-                            DataMapItem dataMapItem = DataMapItem.fromDataItem(item);
+                        DataMap dataMap = dataMapItem.getDataMap();
 
-                            DataMap dataMap = dataMapItem.getDataMap();
-
-                            receivedhighTemp = dataMap.getInt(HIGH_TEMP_KEY);
-                            receivedlowTemp = dataMap.getInt(LOW_TEMP_KEY);
-                            Log.i("sahil", "Wear received info-> high:" + receivedhighTemp+ " low:" + receivedlowTemp);
-                            weatherIconId =dataMap.getInt(WEATHER_ID_KEY);
-                            weatherIcon = BitmapFactory.decodeResource(getResources(), getIconResourceForWeatherCondition(weatherIconId));
-                            if(receivedhighTemp!= -1000 && receivedlowTemp != -1000){
-                                flagRealDataAvailable = 1;
-                            }
-                            else{
-                                flagRealDataAvailable = 0;
-                            }
+                        receivedhighTemp = dataMap.getInt(HIGH_TEMP_KEY);
+                        receivedlowTemp = dataMap.getInt(LOW_TEMP_KEY);
+                        Log.i("sahil", "Wear received info-> high:" + receivedhighTemp+ " low:" + receivedlowTemp);
+                        weatherIconId =dataMap.getInt(WEATHER_ID_KEY);
+                        weatherIcon = BitmapFactory.decodeResource(getResources(), getIconResourceForWeatherCondition(weatherIconId));
+                        if(receivedhighTemp!= -1000 && receivedlowTemp != -1000){
+                            flagRealDataAvailable = 1;
                         }
-                        Log.i("sahil", item.toString());
+                        else{
+                            flagRealDataAvailable = 0;
+                        }
                     }
 
-                    invalidate();
                 }
-
-                @Override
-                public void onFailure(@NonNull Status status) {
-                    Log.i("sahil", "Failed to get any data items");
-                }
-            });
-            Log.i("sahil", "exiting getWeatherUpdate method");
+            }
+            invalidate();
         }
 
         @Override
@@ -239,7 +226,7 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
                         @Override
                         public void onConnected(Bundle bundle) {
                             Log.i("sahil", "Wear reciever connection success");
-                            getUpdatedWeather();
+                            Wearable.DataApi.addListener(client, Engine.this);
                         }
 
                         @Override
@@ -374,7 +361,6 @@ public class WeatherWatchFace extends CanvasWatchFaceService {
         @Override
         public void onTimeTick() {
             super.onTimeTick();
-            getUpdatedWeather();
             invalidate();
         }
 
