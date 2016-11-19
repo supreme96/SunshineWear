@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Wear</string>
+    <string name="message">Watch face tapped</string>
+    <string name="sunshine_watchface">Sunshine WatchFace</string>
+</resources>
